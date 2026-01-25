@@ -8,6 +8,7 @@ interface HeaderProps {
   offliveCount: number;
   isConnected: boolean;
   username: string;
+  userId: string;
   avatarUrl?: string;
   onLogout: () => void;
   onAvatarChange: (url: string) => void;
@@ -20,6 +21,7 @@ export const Header = ({
   offliveCount, 
   isConnected, 
   username,
+  userId,
   avatarUrl,
   onLogout,
   onAvatarChange 
@@ -56,6 +58,7 @@ export const Header = ({
         
         <UserMenu 
           username={username}
+          userId={userId}
           avatarUrl={avatarUrl}
           onLogout={onLogout}
           onAvatarChange={onAvatarChange}

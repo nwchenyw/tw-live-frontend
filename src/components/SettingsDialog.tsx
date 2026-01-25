@@ -11,12 +11,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useYTLiveApi } from "@/hooks/useYTLiveApi";
 import { Camera, Eye, EyeOff, Loader2 } from "lucide-react";
 
 interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   username: string;
+  userId: string;
   currentAvatarUrl?: string;
   onAvatarChange: (url: string) => void;
 }
@@ -25,14 +27,17 @@ export const SettingsDialog = ({
   open,
   onOpenChange,
   username,
+  userId,
   currentAvatarUrl,
   onAvatarChange,
 }: SettingsDialogProps) => {
   const { toast } = useToast();
+  const { uploadAvatar } = useYTLiveApi();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Avatar state
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(currentAvatarUrl);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   
   // Password state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -47,41 +52,57 @@ export const SettingsDialog = ({
     return name.charAt(0).toUpperCase();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith("image/")) {
-        toast({
-          title: "錯誤",
-          description: "請選擇圖片檔案",
-          variant: "destructive",
-        });
-        return;
-      }
+    if (!file) return;
 
-      // Validate file size (max 2MB)
-      if (file.size > 2 * 1024 * 1024) {
-        toast({
-          title: "錯誤",
-          description: "圖片大小不能超過 2MB",
-          variant: "destructive",
-        });
-        return;
-      }
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "錯誤",
+        description: "請選擇圖片檔案",
+        variant: "destructive",
+      });
+      return;
+    }
 
-      // Create preview URL
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setPreviewUrl(result);
-        onAvatarChange(result);
-        toast({
-          title: "成功",
-          description: "頭像已更新",
-        });
-      };
-      reader.readAsDataURL(file);
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: "錯誤",
+        description: "圖片大小不能超過 2MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Create preview URL immediately for better UX
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreviewUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload to backend
+    setIsUploadingAvatar(true);
+    try {
+      const avatarUrl = await uploadAvatar(userId, file);
+      onAvatarChange(avatarUrl);
+      setPreviewUrl(avatarUrl);
+      toast({
+        title: "成功",
+        description: "頭像已上傳並儲存",
+      });
+    } catch (error) {
+      toast({
+        title: "上傳失敗",
+        description: error instanceof Error ? error.message : "無法上傳頭像",
+        variant: "destructive",
+      });
+      // Revert preview on error
+      setPreviewUrl(currentAvatarUrl);
+    } finally {
+      setIsUploadingAvatar(false);
     }
   };
 
@@ -188,9 +209,14 @@ export const SettingsDialog = ({
                 </Avatar>
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 p-1.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                  disabled={isUploadingAvatar}
+                  className="absolute bottom-0 right-0 p-1.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
-                  <Camera className="h-4 w-4" />
+                  {isUploadingAvatar ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Camera className="h-4 w-4" />
+                  )}
                 </button>
               </div>
               <input
@@ -202,7 +228,8 @@ export const SettingsDialog = ({
               />
               <p className="text-sm text-muted-foreground text-center">
                 點擊相機圖示上傳頭像<br />
-                支援 JPG、PNG 格式，最大 2MB
+                支援 JPG、PNG 格式，最大 2MB<br />
+                <span className="text-xs text-primary">頭像將儲存至後端伺服器</span>
               </p>
             </div>
           </TabsContent>

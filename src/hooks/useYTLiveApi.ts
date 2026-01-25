@@ -128,6 +128,54 @@ export const useYTLiveApi = () => {
     }
   }, []);
 
+  // POST /avatar - Upload avatar
+  const uploadAvatar = useCallback(async (userId: string, file: File): Promise<string> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("user_id", userId);
+      formData.append("file", file);
+
+      const response = await fetch(`${API_BASE_URL}/avatar`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      // Return full URL
+      return `${API_BASE_URL}${data.avatar_url}`;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to upload avatar";
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // GET /avatar/{user_id} - Get user avatar URL
+  const getAvatarUrl = useCallback(async (userId: string): Promise<string | null> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/avatar/${userId}`);
+      if (!response.ok) {
+        return null;
+      }
+      const data = await response.json();
+      if (data.avatar_url) {
+        return `${API_BASE_URL}${data.avatar_url}`;
+      }
+      return null;
+    } catch (err) {
+      return null;
+    }
+  }, []);
+
   return {
     loading,
     error,
@@ -136,5 +184,7 @@ export const useYTLiveApi = () => {
     deleteVideo,
     fetchStatus,
     checkHealth,
+    uploadAvatar,
+    getAvatarUrl,
   };
 };
