@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Client } from "https://deno.land/x/mysql@v2.12.1/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,9 +7,9 @@ const corsHeaders = {
 };
 
 // Simple hash function using Web Crypto API
-async function hashPassword(password: string): Promise<string> {
+async function hashPassword(password: string, salt: string): Promise<string> {
   const encoder = new TextEncoder();
-  const data = encoder.encode(password + Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.slice(0, 16));
+  const data = encoder.encode(password + salt);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -19,6 +19,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  let client: Client | null = null;
 
   try {
     const { username, password } = await req.json();
@@ -45,18 +47,23 @@ serve(async (req) => {
       );
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Connect to MySQL
+    client = await new Client().connect({
+      hostname: Deno.env.get("MYSQL_HOST") || "localhost",
+      port: parseInt(Deno.env.get("MYSQL_PORT") || "3306"),
+      username: Deno.env.get("MYSQL_USERNAME") || "",
+      password: Deno.env.get("MYSQL_PASSWORD") || "",
+      db: Deno.env.get("MYSQL_DATABASE") || "",
+    });
 
     // Check if username already exists
-    const { data: existingUser } = await supabase
-      .from("users")
-      .select("id")
-      .eq("username", username)
-      .single();
+    const existingUsers = await client.query(
+      "SELECT id FROM users WHERE username = ? LIMIT 1",
+      [username]
+    );
 
-    if (existingUser) {
+    if (existingUsers && existingUsers.length > 0) {
+      await client.close();
       return new Response(
         JSON.stringify({ error: "Username already exists" }),
         { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -64,21 +71,23 @@ serve(async (req) => {
     }
 
     // Hash password and create user
-    const passwordHash = await hashPassword(password);
+    const salt = Deno.env.get("PASSWORD_SALT") || "tw_live_salt_2024";
+    const passwordHash = await hashPassword(password, salt);
     
-    const { data: newUser, error: insertError } = await supabase
-      .from("users")
-      .insert({ username, password_hash: passwordHash })
-      .select("id, username, created_at")
-      .single();
+    const result = await client.execute(
+      "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, NOW())",
+      [username, passwordHash]
+    );
 
-    if (insertError) {
-      console.error("Insert error:", insertError);
-      return new Response(
-        JSON.stringify({ error: "Failed to create user" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    // Get the newly created user
+    const newUsers = await client.query(
+      "SELECT id, username, created_at FROM users WHERE id = ?",
+      [result.lastInsertId]
+    );
+
+    await client.close();
+
+    const newUser = newUsers[0];
 
     return new Response(
       JSON.stringify({ success: true, user: newUser }),
@@ -86,6 +95,13 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("Signup error:", error);
+    if (client) {
+      try {
+        await client.close();
+      } catch (e) {
+        console.error("Error closing connection:", e);
+      }
+    }
     return new Response(
       JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -1,15 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Client } from "https://deno.land/x/mysql@v2.12.1/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Simple hash function using Web Crypto API (must match signup)
-async function hashPassword(password: string): Promise<string> {
+// Simple hash function using Web Crypto API
+async function hashPassword(password: string, salt: string): Promise<string> {
   const encoder = new TextEncoder();
-  const data = encoder.encode(password + Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.slice(0, 16));
+  const data = encoder.encode(password + salt);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -27,6 +27,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let client: Client | null = null;
+
   try {
     const { username, password } = await req.json();
 
@@ -38,32 +40,44 @@ serve(async (req) => {
       );
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Connect to MySQL
+    client = await new Client().connect({
+      hostname: Deno.env.get("MYSQL_HOST") || "localhost",
+      port: parseInt(Deno.env.get("MYSQL_PORT") || "3306"),
+      username: Deno.env.get("MYSQL_USERNAME") || "",
+      password: Deno.env.get("MYSQL_PASSWORD") || "",
+      db: Deno.env.get("MYSQL_DATABASE") || "",
+    });
 
     // Find user by username
-    const { data: user, error: findError } = await supabase
-      .from("users")
-      .select("id, username, password_hash, created_at")
-      .eq("username", username)
-      .single();
+    const users = await client.query(
+      "SELECT id, username, password_hash, created_at FROM users WHERE username = ? LIMIT 1",
+      [username]
+    );
 
-    if (findError || !user) {
+    if (!users || users.length === 0) {
+      await client.close();
       return new Response(
         JSON.stringify({ error: "Invalid username or password" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Verify password
-    const passwordHash = await hashPassword(password);
+    const user = users[0];
+
+    // Verify password using a salt from env or a default
+    const salt = Deno.env.get("PASSWORD_SALT") || "tw_live_salt_2024";
+    const passwordHash = await hashPassword(password, salt);
+    
     if (passwordHash !== user.password_hash) {
+      await client.close();
       return new Response(
         JSON.stringify({ error: "Invalid username or password" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    await client.close();
 
     // Generate session token
     const sessionToken = generateSessionToken();
@@ -84,6 +98,13 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("Login error:", error);
+    if (client) {
+      try {
+        await client.close();
+      } catch (e) {
+        console.error("Error closing connection:", e);
+      }
+    }
     return new Response(
       JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
