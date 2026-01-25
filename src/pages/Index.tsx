@@ -27,15 +27,20 @@ const generateMockData = (): MonitorItem[] => {
   return mockItems;
 };
 
+const AVATAR_STORAGE_KEY = "yt_live_avatar";
+
 const Index = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { loading, isAuthenticated, signOut } = useAuth();
+  const { user, loading, isAuthenticated, signOut } = useAuth();
   const [monitors, setMonitors] = useState<MonitorItem[]>(generateMockData);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
   const [statusFilter, setStatusFilter] = useState("all");
   const [autoRefreshInterval, setAutoRefreshInterval] = useState("30");
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(() => {
+    return localStorage.getItem(AVATAR_STORAGE_KEY) || undefined;
+  });
 
   useEffect(() => {
     // Redirect to login if not authenticated
@@ -114,6 +119,11 @@ const Index = () => {
     navigate("/login");
   };
 
+  const handleAvatarChange = (url: string) => {
+    setAvatarUrl(url);
+    localStorage.setItem(AVATAR_STORAGE_KEY, url);
+  };
+
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
@@ -144,7 +154,10 @@ const Index = () => {
         onliveCount={liveCount}
         offliveCount={offlineCount}
         isConnected={true}
+        username={user?.username || "User"}
+        avatarUrl={avatarUrl}
         onLogout={handleLogout}
+        onAvatarChange={handleAvatarChange}
       />
       
       <main className="flex-1 p-6">
