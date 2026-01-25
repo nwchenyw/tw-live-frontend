@@ -11,7 +11,7 @@ from typing import Dict, Optional, List
 from urllib.parse import urlparse, parse_qs
 
 import httpx
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from fastapi.responses import HTMLResponse
@@ -45,14 +45,6 @@ CONFIG_PATH = Path("config.json")
 # 目前 DB 沒有 name 欄位：先用記憶體暫存（重開會消失）
 NAME_CACHE: Dict[str, Optional[str]] = {}
 
-# -------------------------
-# Avatar 設定
-# -------------------------
-AVATAR_DIR = "/root/Donezo/img/users"
-os.makedirs(AVATAR_DIR, exist_ok=True)
-
-# 頭像 URL 快取（實際應該存到 DB）
-AVATAR_CACHE: Dict[str, str] = {}
 
 
 # -------------------------
@@ -159,8 +151,6 @@ class StatusItem(BaseModel):
     note: Optional[str] = None
 
 
-class AvatarResponse(BaseModel):
-    avatar_url: Optional[str] = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -191,8 +181,6 @@ app.add_middleware(
 SessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False, class_=AsyncSession)
 # 掛載 static 資料夾
 app.mount("/static", StaticFiles(directory="static"), name="static")
-# 掛載用戶頭像資料夾
-app.mount("/static/users", StaticFiles(directory=AVATAR_DIR), name="user-avatars")
 
 STATUS_CACHE: Dict[str, StatusItem] = {}
 
@@ -367,83 +355,6 @@ async def list_status():
     return list(STATUS_CACHE.values())
 
 
-# -------------------------
-# Avatar 頭像 API
-# -------------------------
-@app.post("/avatar", response_model=AvatarResponse)
-async def upload_avatar(
-    user_id: str = Form(...),
-    file: UploadFile = File(...)
-):
-    """
-    上傳用戶頭像
-    - user_id: 用戶 ID
-    - file: 圖片檔案
-    """
-    # 驗證檔案類型
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(400, "只接受圖片檔案")
-    
-    # 驗證檔案大小 (最大 2MB)
-    content = await file.read()
-    if len(content) > 2 * 1024 * 1024:
-        raise HTTPException(400, "圖片大小不能超過 2MB")
-    
-    # 生成唯一檔名
-    ext = os.path.splitext(file.filename or "")[1] or ".jpg"
-    filename = f"{user_id}_{uuid.uuid4().hex[:8]}{ext}"
-    filepath = os.path.join(AVATAR_DIR, filename)
-    
-    # 刪除該用戶的舊頭像
-    for old_file in Path(AVATAR_DIR).glob(f"{user_id}_*"):
-        try:
-            old_file.unlink()
-        except Exception:
-            pass
-    
-    # 儲存新檔案
-    with open(filepath, "wb") as f:
-        f.write(content)
-    
-    avatar_url = f"/static/users/{filename}"
-    
-    # 更新快取
-    AVATAR_CACHE[user_id] = avatar_url
-    
-    # TODO: 如果你想永久保存，可以在這裡更新 MySQL users 表的 avatar_url 欄位
-    # 例如：
-    # async with SessionLocal() as db:
-    #     await db.execute(text("UPDATE users SET avatar_url = :url WHERE id = :id"), {"url": avatar_url, "id": user_id})
-    #     await db.commit()
-    
-    logger.info(f"用戶 {user_id} 上傳了新頭像: {filename}")
-    
-    return AvatarResponse(avatar_url=avatar_url)
-
-
-@app.get("/avatar/{user_id}", response_model=AvatarResponse)
-async def get_avatar(user_id: str):
-    """
-    取得用戶頭像 URL
-    """
-    # 先從快取查
-    if user_id in AVATAR_CACHE:
-        return AvatarResponse(avatar_url=AVATAR_CACHE[user_id])
-    
-    # 從檔案系統查找
-    for avatar_file in Path(AVATAR_DIR).glob(f"{user_id}_*"):
-        avatar_url = f"/static/users/{avatar_file.name}"
-        AVATAR_CACHE[user_id] = avatar_url
-        return AvatarResponse(avatar_url=avatar_url)
-    
-    # TODO: 如果你有存到 MySQL，可以從 DB 查詢
-    # async with SessionLocal() as db:
-    #     result = await db.execute(text("SELECT avatar_url FROM users WHERE id = :id"), {"id": user_id})
-    #     row = result.fetchone()
-    #     if row and row.avatar_url:
-    #         return AvatarResponse(avatar_url=row.avatar_url)
-    
-    return AvatarResponse(avatar_url=None)
 
 # -------------------------
 # 更改密碼 API
