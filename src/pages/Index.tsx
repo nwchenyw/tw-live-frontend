@@ -134,12 +134,15 @@ const Index = () => {
   });
 
   const liveCount = monitors.filter(m => m.status === "live").length;
+  const offlineCount = monitors.filter(m => m.status === "offline").length;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header
         watchingCount={liveCount}
         cachedCount={monitors.length}
+        onliveCount={liveCount}
+        offliveCount={offlineCount}
         isConnected={true}
         onLogout={handleLogout}
       />
