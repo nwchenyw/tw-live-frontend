@@ -8,6 +8,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useYTLiveApi, StatusItem } from "@/hooks/useYTLiveApi";
 import { getStoredAvatar } from "@/components/SettingsDialog";
 
+const withCacheBust = (url: string) => {
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}v=${Date.now()}`;
+};
+
 const Index = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -29,7 +34,7 @@ const Index = () => {
     if (user?.id) {
       const storedAvatar = getStoredAvatar(user.id);
       if (storedAvatar) {
-        setAvatarUrl(storedAvatar);
+        setAvatarUrl(withCacheBust(storedAvatar));
       }
     }
   }, [user?.id]);
@@ -207,7 +212,7 @@ const Index = () => {
   };
 
   const handleAvatarChange = (url: string) => {
-    setAvatarUrl(url || undefined);
+    setAvatarUrl(url ? withCacheBust(url) : undefined);
   };
 
   const handlePageChange = (page: number) => {

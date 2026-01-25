@@ -21,6 +21,13 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://tw-live.nwche
 // localStorage key for avatar URL (stores server URL, not base64)
 const getAvatarStorageKey = (userId: string) => `avatar_url_${userId}`;
 
+// Some browsers can cache a previous 404 for the same image URL; add a cache-buster so the
+// avatar will re-fetch immediately after backend fixes or re-uploads.
+const withCacheBust = (url: string) => {
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}v=${Date.now()}`;
+};
+
 // 從 localStorage 讀取頭像 URL
 export const getStoredAvatar = (userId: string): string | null => {
   try {
@@ -158,7 +165,7 @@ export const SettingsDialog = ({
     if (open && userId) {
       const storedAvatar = getStoredAvatar(userId);
       if (storedAvatar) {
-        setPreviewUrl(storedAvatar);
+        setPreviewUrl(withCacheBust(storedAvatar));
       } else {
         setPreviewUrl(currentAvatarUrl);
       }
@@ -270,8 +277,9 @@ export const SettingsDialog = ({
 
       // Save URL to localStorage
       saveAvatarUrlToStorage(userId, fullAvatarUrl);
-      setPreviewUrl(fullAvatarUrl);
-      onAvatarChange(fullAvatarUrl);
+      const displayUrl = withCacheBust(fullAvatarUrl);
+      setPreviewUrl(displayUrl);
+      onAvatarChange(displayUrl);
 
       // Reset crop state
       handleCropCancel();
