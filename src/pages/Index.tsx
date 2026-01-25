@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { AddMonitorForm } from "@/components/AddMonitorForm";
@@ -37,11 +37,12 @@ const Index = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [autoRefreshInterval, setAutoRefreshInterval] = useState("30");
 
-  // Redirect to login if not authenticated
-  if (!loading && !isAuthenticated) {
-    navigate("/login");
-    return null;
-  }
+  useEffect(() => {
+    // Redirect to login if not authenticated
+    if (!loading && !isAuthenticated) {
+      navigate("/login");
+    }
+  }, [loading, isAuthenticated, navigate]);
 
   // Show loading while checking auth
   if (loading) {
@@ -50,6 +51,11 @@ const Index = () => {
         <div className="text-muted-foreground">載入中...</div>
       </div>
     );
+  }
+
+  // Don't render if not authenticated
+  if (!isAuthenticated) {
+    return null;
   }
   
   const filteredMonitors = monitors.filter(m => {
@@ -99,8 +105,8 @@ const Index = () => {
     window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
   };
 
-  const handleLogout = async () => {
-    await signOut();
+  const handleLogout = () => {
+    signOut();
     toast({
       title: "登出成功",
       description: "您已成功登出",

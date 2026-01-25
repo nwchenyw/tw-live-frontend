@@ -5,15 +5,16 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { User, Lock, Eye, EyeOff } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
-const REMEMBER_KEY = "yt_live_remember_email";
+const REMEMBER_KEY = "yt_live_remember_username";
 
 const Login = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [email, setEmail] = useState("");
+  const { login, signup, isAuthenticated } = useAuth();
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -21,22 +22,20 @@ const Login = () => {
   const [isSignUp, setIsSignUp] = useState(false);
 
   useEffect(() => {
-    // Check for remembered email
-    const rememberedEmail = localStorage.getItem(REMEMBER_KEY);
-    if (rememberedEmail) {
-      setEmail(rememberedEmail);
+    // Check for remembered username
+    const rememberedUsername = localStorage.getItem(REMEMBER_KEY);
+    if (rememberedUsername) {
+      setUsername(rememberedUsername);
       setRememberMe(true);
     }
+  }, []);
 
-    // Check if user is already logged in
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        navigate("/");
-      }
-    };
-    checkSession();
-  }, [navigate]);
+  useEffect(() => {
+    // Redirect if already authenticated
+    if (isAuthenticated) {
+      navigate("/");
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,26 +43,20 @@ const Login = () => {
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (error) throw error;
+        const { error } = await signup(username, password);
+        if (error) throw new Error(error);
         toast({
           title: "註冊成功",
           description: "帳號已建立，您可以直接登入。",
         });
         setIsSignUp(false);
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
+        const { error } = await login(username, password);
+        if (error) throw new Error(error);
         
         // Handle remember me
         if (rememberMe) {
-          localStorage.setItem(REMEMBER_KEY, email);
+          localStorage.setItem(REMEMBER_KEY, username);
         } else {
           localStorage.removeItem(REMEMBER_KEY);
         }
@@ -93,14 +86,14 @@ const Login = () => {
 
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Email Input */}
+          {/* Username Input */}
           <div className="relative">
             <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              type="email"
+              type="text"
               placeholder="Username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               className="pl-10 h-11 bg-background border-input"
               required
             />
