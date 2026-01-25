@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 
-// Configure this to your Python backend URL
-const API_BASE_URL = "http://localhost:8000";
+// 從環境變數讀取後端 URL，預設為 localhost:8000
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export interface VideoItem {
   video_id: string;
