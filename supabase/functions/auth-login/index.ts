@@ -40,18 +40,18 @@ serve(async (req) => {
       );
     }
 
-    // Connect to MySQL
+    // Connect to MySQL (don't specify db in connection, use backticks in queries for db names with dots)
+    const dbName = Deno.env.get("MYSQL_DATABASE") || "";
     client = await new Client().connect({
       hostname: Deno.env.get("MYSQL_HOST") || "localhost",
       port: parseInt(Deno.env.get("MYSQL_PORT") || "3306"),
       username: Deno.env.get("MYSQL_USERNAME") || "",
       password: Deno.env.get("MYSQL_PASSWORD") || "",
-      db: Deno.env.get("MYSQL_DATABASE") || "",
     });
 
-    // Find user by username
+    // Find user by username (use backticks for db name with dots)
     const users = await client.query(
-      "SELECT id, username, password_hash, created_at FROM users WHERE username = ? LIMIT 1",
+      `SELECT id, username, password_hash, created_at FROM \`${dbName}\`.users WHERE username = ? LIMIT 1`,
       [username]
     );
 

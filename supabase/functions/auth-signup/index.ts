@@ -47,18 +47,18 @@ serve(async (req) => {
       );
     }
 
-    // Connect to MySQL
+    // Connect to MySQL (don't specify db in connection, use backticks in queries for db names with dots)
+    const dbName = Deno.env.get("MYSQL_DATABASE") || "";
     client = await new Client().connect({
       hostname: Deno.env.get("MYSQL_HOST") || "localhost",
       port: parseInt(Deno.env.get("MYSQL_PORT") || "3306"),
       username: Deno.env.get("MYSQL_USERNAME") || "",
       password: Deno.env.get("MYSQL_PASSWORD") || "",
-      db: Deno.env.get("MYSQL_DATABASE") || "",
     });
 
     // Check if username already exists
     const existingUsers = await client.query(
-      "SELECT id FROM users WHERE username = ? LIMIT 1",
+      `SELECT id FROM \`${dbName}\`.users WHERE username = ? LIMIT 1`,
       [username]
     );
 
@@ -75,13 +75,13 @@ serve(async (req) => {
     const passwordHash = await hashPassword(password, salt);
     
     const result = await client.execute(
-      "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, NOW())",
+      `INSERT INTO \`${dbName}\`.users (username, password_hash, created_at) VALUES (?, ?, NOW())`,
       [username, passwordHash]
     );
 
     // Get the newly created user
     const newUsers = await client.query(
-      "SELECT id, username, created_at FROM users WHERE id = ?",
+      `SELECT id, username, created_at FROM \`${dbName}\`.users WHERE id = ?`,
       [result.lastInsertId]
     );
 

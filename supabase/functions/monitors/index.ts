@@ -14,13 +14,13 @@ serve(async (req) => {
   let client: Client | null = null;
 
   try {
-    // Connect to MySQL
+    // Connect to MySQL (don't specify db in connection, use backticks in queries for db names with dots)
+    const dbName = Deno.env.get("MYSQL_DATABASE") || "";
     client = await new Client().connect({
       hostname: Deno.env.get("MYSQL_HOST") || "localhost",
       port: parseInt(Deno.env.get("MYSQL_PORT") || "3306"),
       username: Deno.env.get("MYSQL_USERNAME") || "",
       password: Deno.env.get("MYSQL_PASSWORD") || "",
-      db: Deno.env.get("MYSQL_DATABASE") || "",
     });
 
     const url = new URL(req.url);
@@ -31,12 +31,12 @@ serve(async (req) => {
       let monitors;
       if (userId) {
         monitors = await client.query(
-          "SELECT * FROM monitors WHERE user_id = ? ORDER BY created_at DESC",
+          `SELECT * FROM \`${dbName}\`.monitors WHERE user_id = ? ORDER BY created_at DESC`,
           [userId]
         );
       } else {
         monitors = await client.query(
-          "SELECT * FROM monitors ORDER BY created_at DESC"
+          `SELECT * FROM \`${dbName}\`.monitors ORDER BY created_at DESC`
         );
       }
 
@@ -62,7 +62,7 @@ serve(async (req) => {
 
       // Check if already exists
       const existing = await client.query(
-        "SELECT id FROM monitors WHERE user_id = ? AND channel_id = ? LIMIT 1",
+        `SELECT id FROM \`${dbName}\`.monitors WHERE user_id = ? AND channel_id = ? LIMIT 1`,
         [user_id, channel_id]
       );
 
@@ -75,13 +75,13 @@ serve(async (req) => {
       }
 
       const result = await client.execute(
-        `INSERT INTO monitors (user_id, channel_id, channel_name, channel_url, thumbnail_url, is_live, created_at, updated_at) 
+        `INSERT INTO \`${dbName}\`.monitors (user_id, channel_id, channel_name, channel_url, thumbnail_url, is_live, created_at, updated_at) 
          VALUES (?, ?, ?, ?, ?, false, NOW(), NOW())`,
         [user_id, channel_id, channel_name || "", channel_url || "", thumbnail_url || ""]
       );
 
       const newMonitors = await client.query(
-        "SELECT * FROM monitors WHERE id = ?",
+        `SELECT * FROM \`${dbName}\`.monitors WHERE id = ?`,
         [result.lastInsertId]
       );
 
@@ -106,7 +106,7 @@ serve(async (req) => {
       }
 
       await client.execute(
-        "DELETE FROM monitors WHERE id = ? AND user_id = ?",
+        `DELETE FROM \`${dbName}\`.monitors WHERE id = ? AND user_id = ?`,
         [monitor_id, deleteUserId]
       );
 
