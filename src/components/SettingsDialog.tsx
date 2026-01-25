@@ -125,10 +125,9 @@ export const SettingsDialog = ({
       // Create FormData for upload
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("user_id", userId);
 
-      // Upload to backend
-      const response = await fetch(`${API_BASE_URL}/upload-avatar`, {
+      // Upload to backend (user_id as query parameter)
+      const response = await fetch(`${API_BASE_URL}/upload-avatar?user_id=${encodeURIComponent(userId)}`, {
         method: "POST",
         body: formData,
       });
