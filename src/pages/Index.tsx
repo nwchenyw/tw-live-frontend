@@ -6,8 +6,7 @@ import { MonitorList, MonitorItem } from "@/components/MonitorList";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useYTLiveApi, StatusItem } from "@/hooks/useYTLiveApi";
-
-const AVATAR_STORAGE_KEY = "yt_live_avatar";
+import { getStoredAvatar } from "@/components/SettingsDialog";
 
 const Index = () => {
   const { toast } = useToast();
@@ -23,9 +22,17 @@ const Index = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [healthStats, setHealthStats] = useState({ watching: 0, cached: 0 });
   const [lastUpdate, setLastUpdate] = useState<string>("");
-  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(() => {
-    return localStorage.getItem(AVATAR_STORAGE_KEY) || undefined;
-  });
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
+
+  // 載入使用者頭像
+  useEffect(() => {
+    if (user?.id) {
+      const storedAvatar = getStoredAvatar(user.id);
+      if (storedAvatar) {
+        setAvatarUrl(storedAvatar);
+      }
+    }
+  }, [user?.id]);
 
   // Load videos and status from Python backend
   const loadData = useCallback(async () => {
@@ -200,8 +207,7 @@ const Index = () => {
   };
 
   const handleAvatarChange = (url: string) => {
-    setAvatarUrl(url);
-    localStorage.setItem(AVATAR_STORAGE_KEY, url);
+    setAvatarUrl(url || undefined);
   };
 
   const handlePageChange = (page: number) => {
