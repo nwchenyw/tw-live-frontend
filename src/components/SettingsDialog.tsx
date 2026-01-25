@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,8 +11,38 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { useYTLiveApi } from "@/hooks/useYTLiveApi";
-import { Camera, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Camera, Eye, EyeOff, Loader2, Trash2 } from "lucide-react";
+
+// localStorage key for avatar
+const getAvatarStorageKey = (userId: string) => `avatar_${userId}`;
+
+// 從 localStorage 讀取頭像
+export const getStoredAvatar = (userId: string): string | null => {
+  try {
+    return localStorage.getItem(getAvatarStorageKey(userId));
+  } catch {
+    return null;
+  }
+};
+
+// 儲存頭像到 localStorage
+const saveAvatarToStorage = (userId: string, base64: string): void => {
+  try {
+    localStorage.setItem(getAvatarStorageKey(userId), base64);
+  } catch (e) {
+    console.error("無法儲存頭像到 localStorage:", e);
+    throw new Error("儲存空間不足，請嘗試使用較小的圖片");
+  }
+};
+
+// 從 localStorage 刪除頭像
+const removeAvatarFromStorage = (userId: string): void => {
+  try {
+    localStorage.removeItem(getAvatarStorageKey(userId));
+  } catch {
+    // ignore
+  }
+};
 
 interface SettingsDialogProps {
   open: boolean;
@@ -32,7 +62,6 @@ export const SettingsDialog = ({
   onAvatarChange,
 }: SettingsDialogProps) => {
   const { toast } = useToast();
-  const { uploadAvatar } = useYTLiveApi();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Avatar state
@@ -47,6 +76,18 @@ export const SettingsDialog = ({
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  // 當 dialog 開啟時，從 localStorage 讀取頭像
+  useEffect(() => {
+    if (open && userId) {
+      const storedAvatar = getStoredAvatar(userId);
+      if (storedAvatar) {
+        setPreviewUrl(storedAvatar);
+      } else {
+        setPreviewUrl(currentAvatarUrl);
+      }
+    }
+  }, [open, userId, currentAvatarUrl]);
 
   const getInitials = (name: string) => {
     return name.charAt(0).toUpperCase();
@@ -66,44 +107,71 @@ export const SettingsDialog = ({
       return;
     }
 
-    // Validate file size (max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
+    // Validate file size (max 500KB for localStorage)
+    if (file.size > 500 * 1024) {
       toast({
         title: "錯誤",
-        description: "圖片大小不能超過 2MB",
+        description: "圖片大小不能超過 500KB（localStorage 限制）",
         variant: "destructive",
       });
       return;
     }
 
-    // Create preview URL immediately for better UX
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPreviewUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-
-    // Upload to backend
     setIsUploadingAvatar(true);
+
     try {
-      const avatarUrl = await uploadAvatar(userId, file);
-      onAvatarChange(avatarUrl);
-      setPreviewUrl(avatarUrl);
-      toast({
-        title: "成功",
-        description: "頭像已上傳並儲存",
-      });
+      // Convert to Base64
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        
+        try {
+          // Save to localStorage
+          saveAvatarToStorage(userId, base64);
+          setPreviewUrl(base64);
+          onAvatarChange(base64);
+          
+          toast({
+            title: "成功",
+            description: "頭像已儲存到本地",
+          });
+        } catch (error) {
+          toast({
+            title: "儲存失敗",
+            description: error instanceof Error ? error.message : "無法儲存頭像",
+            variant: "destructive",
+          });
+        } finally {
+          setIsUploadingAvatar(false);
+        }
+      };
+      reader.onerror = () => {
+        toast({
+          title: "讀取失敗",
+          description: "無法讀取圖片檔案",
+          variant: "destructive",
+        });
+        setIsUploadingAvatar(false);
+      };
+      reader.readAsDataURL(file);
     } catch (error) {
       toast({
-        title: "上傳失敗",
-        description: error instanceof Error ? error.message : "無法上傳頭像",
+        title: "錯誤",
+        description: "處理圖片時發生錯誤",
         variant: "destructive",
       });
-      // Revert preview on error
-      setPreviewUrl(currentAvatarUrl);
-    } finally {
       setIsUploadingAvatar(false);
     }
+  };
+
+  const handleRemoveAvatar = () => {
+    removeAvatarFromStorage(userId);
+    setPreviewUrl(undefined);
+    onAvatarChange("");
+    toast({
+      title: "成功",
+      description: "頭像已移除",
+    });
   };
 
   const handlePasswordChange = async () => {
@@ -226,9 +294,20 @@ export const SettingsDialog = ({
               />
               <p className="text-sm text-muted-foreground text-center">
                 點擊相機圖示上傳頭像<br />
-                支援 JPG、PNG 格式，最大 2MB<br />
-                <span className="text-xs text-primary">頭像將儲存至後端伺服器</span>
+                支援 JPG、PNG 格式，最大 500KB<br />
+                <span className="text-xs text-primary">頭像將儲存在瀏覽器本地</span>
               </p>
+              {previewUrl && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRemoveAvatar}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  移除頭像
+                </Button>
+              )}
             </div>
           </TabsContent>
 
