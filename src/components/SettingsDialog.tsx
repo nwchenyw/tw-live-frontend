@@ -1,4 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import ReactCrop, { Crop, PixelCrop, centerCrop, makeAspectCrop } from "react-image-crop";
+import "react-image-crop/dist/ReactCrop.css";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Camera, Eye, EyeOff, Loader2, Trash2 } from "lucide-react";
+import { Camera, Eye, EyeOff, Loader2, Trash2, Check, X } from "lucide-react";
 
 // 從環境變數讀取後端 URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://tw-live.nwchenyw.com";
@@ -46,6 +48,71 @@ const removeAvatarFromStorage = (userId: string): void => {
   }
 };
 
+// Helper function to create centered square crop
+function centerAspectCrop(
+  mediaWidth: number,
+  mediaHeight: number,
+  aspect: number
+): Crop {
+  return centerCrop(
+    makeAspectCrop(
+      {
+        unit: "%",
+        width: 90,
+      },
+      aspect,
+      mediaWidth,
+      mediaHeight
+    ),
+    mediaWidth,
+    mediaHeight
+  );
+}
+
+// Helper function to get cropped image as blob
+async function getCroppedImg(
+  image: HTMLImageElement,
+  crop: PixelCrop
+): Promise<Blob> {
+  const canvas = document.createElement("canvas");
+  const scaleX = image.naturalWidth / image.width;
+  const scaleY = image.naturalHeight / image.height;
+  
+  canvas.width = crop.width;
+  canvas.height = crop.height;
+  
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("No 2d context");
+  }
+
+  ctx.drawImage(
+    image,
+    crop.x * scaleX,
+    crop.y * scaleY,
+    crop.width * scaleX,
+    crop.height * scaleY,
+    0,
+    0,
+    crop.width,
+    crop.height
+  );
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Canvas is empty"));
+          return;
+        }
+        resolve(blob);
+      },
+      "image/jpeg",
+      0.9
+    );
+  });
+}
+
 interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -65,10 +132,17 @@ export const SettingsDialog = ({
 }: SettingsDialogProps) => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
   
   // Avatar state
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(currentAvatarUrl);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  
+  // Crop state
+  const [cropImageSrc, setCropImageSrc] = useState<string>("");
+  const [crop, setCrop] = useState<Crop>();
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+  const [isCropping, setIsCropping] = useState(false);
   
   // Password state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -91,9 +165,24 @@ export const SettingsDialog = ({
     }
   }, [open, userId, currentAvatarUrl]);
 
+  // Reset crop state when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setCropImageSrc("");
+      setCrop(undefined);
+      setCompletedCrop(undefined);
+      setIsCropping(false);
+    }
+  }, [open]);
+
   const getInitials = (name: string) => {
     return name.charAt(0).toUpperCase();
   };
+
+  const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { width, height } = e.currentTarget;
+    setCrop(centerAspectCrop(width, height, 1));
+  }, []);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -109,11 +198,42 @@ export const SettingsDialog = ({
       return;
     }
 
-    // Validate file size (max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
+    // Validate file size (max 5MB for cropping, will be compressed after)
+    if (file.size > 5 * 1024 * 1024) {
       toast({
         title: "錯誤",
-        description: "圖片大小不能超過 2MB",
+        description: "圖片大小不能超過 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Read file and show crop UI
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropImageSrc(reader.result as string);
+      setIsCropping(true);
+    };
+    reader.readAsDataURL(file);
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleCropCancel = () => {
+    setCropImageSrc("");
+    setCrop(undefined);
+    setCompletedCrop(undefined);
+    setIsCropping(false);
+  };
+
+  const handleCropConfirm = async () => {
+    if (!imgRef.current || !completedCrop) {
+      toast({
+        title: "錯誤",
+        description: "請選擇裁切區域",
         variant: "destructive",
       });
       return;
@@ -122,9 +242,12 @@ export const SettingsDialog = ({
     setIsUploadingAvatar(true);
 
     try {
+      // Get cropped image as blob
+      const croppedBlob = await getCroppedImg(imgRef.current, completedCrop);
+      
       // Create FormData for upload
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", croppedBlob, "avatar.jpg");
 
       // Upload to backend (user_id as query parameter)
       const response = await fetch(`${API_BASE_URL}/upload-avatar?user_id=${encodeURIComponent(userId)}`, {
@@ -150,6 +273,9 @@ export const SettingsDialog = ({
       setPreviewUrl(fullAvatarUrl);
       onAvatarChange(fullAvatarUrl);
 
+      // Reset crop state
+      handleCropCancel();
+
       toast({
         title: "成功",
         description: "頭像已上傳",
@@ -163,10 +289,6 @@ export const SettingsDialog = ({
       });
     } finally {
       setIsUploadingAvatar(false);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
     }
   };
 
@@ -297,50 +419,100 @@ export const SettingsDialog = ({
           </TabsList>
 
           <TabsContent value="avatar" className="space-y-4 mt-4">
-            <div className="flex flex-col items-center gap-4">
-              <div className="relative">
-                <Avatar className="h-24 w-24">
-                  <AvatarImage src={previewUrl} alt={username} />
-                  <AvatarFallback className="bg-primary text-primary-foreground text-2xl font-medium">
-                    {getInitials(username)}
-                  </AvatarFallback>
-                </Avatar>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploadingAvatar}
-                  className="absolute bottom-0 right-0 p-1.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
-                >
-                  {isUploadingAvatar ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Camera className="h-4 w-4" />
-                  )}
-                </button>
+            {isCropping ? (
+              // Crop UI
+              <div className="flex flex-col items-center gap-4">
+                <p className="text-sm text-muted-foreground">
+                  拖曳選擇裁切區域
+                </p>
+                <div className="max-h-[300px] overflow-hidden rounded-lg border">
+                  <ReactCrop
+                    crop={crop}
+                    onChange={(_, percentCrop) => setCrop(percentCrop)}
+                    onComplete={(c) => setCompletedCrop(c)}
+                    aspect={1}
+                    circularCrop
+                  >
+                    <img
+                      ref={imgRef}
+                      src={cropImageSrc}
+                      alt="裁切預覽"
+                      onLoad={onImageLoad}
+                      style={{ maxHeight: "300px", maxWidth: "100%" }}
+                    />
+                  </ReactCrop>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCropCancel}
+                    disabled={isUploadingAvatar}
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    取消
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleCropConfirm}
+                    disabled={isUploadingAvatar || !completedCrop}
+                  >
+                    {isUploadingAvatar ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Check className="mr-2 h-4 w-4" />
+                    )}
+                    確認上傳
+                  </Button>
+                </div>
               </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              <p className="text-sm text-muted-foreground text-center">
-                點擊相機圖示上傳頭像<br />
-                支援 JPG、PNG 格式，最大 2MB
-              </p>
-              {previewUrl && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRemoveAvatar}
-                  disabled={isUploadingAvatar}
-                  className="text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  移除頭像
-                </Button>
-              )}
-            </div>
+            ) : (
+              // Normal avatar display
+              <div className="flex flex-col items-center gap-4">
+                <div className="relative">
+                  <Avatar className="h-24 w-24">
+                    <AvatarImage src={previewUrl} alt={username} />
+                    <AvatarFallback className="bg-primary text-primary-foreground text-2xl font-medium">
+                      {getInitials(username)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingAvatar}
+                    className="absolute bottom-0 right-0 p-1.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  >
+                    {isUploadingAvatar ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Camera className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <p className="text-sm text-muted-foreground text-center">
+                  點擊相機圖示上傳頭像<br />
+                  支援 JPG、PNG 格式，最大 5MB
+                </p>
+                {previewUrl && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRemoveAvatar}
+                    disabled={isUploadingAvatar}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    移除頭像
+                  </Button>
+                )}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="password" className="space-y-4 mt-4">
