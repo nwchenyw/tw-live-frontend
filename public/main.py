@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -21,6 +22,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db import engine, get_db
 from app.models import YoutubeLiveStatus  # 對應 youtube_live_status 表
+
+# -------------------------
+# 密碼 Hash 設定（與前端 Edge Function 一致）
+# -------------------------
+PASSWORD_SALT = "tw_live_salt_2024"
+
+def hash_password(password: str) -> str:
+    """使用 SHA-256 和固定 salt 進行密碼雜湊"""
+    salted = password + PASSWORD_SALT
+    return hashlib.sha256(salted.encode()).hexdigest()
 
 
 # -------------------------
@@ -150,6 +161,17 @@ class StatusItem(BaseModel):
 
 class AvatarResponse(BaseModel):
     avatar_url: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    username: str
+    currentPassword: str
+    newPassword: str
+
+
+class ChangePasswordResponse(BaseModel):
+    success: bool
+    message: Optional[str] = None
 
 
 # -------------------------
@@ -422,6 +444,63 @@ async def get_avatar(user_id: str):
     #         return AvatarResponse(avatar_url=row.avatar_url)
     
     return AvatarResponse(avatar_url=None)
+
+# -------------------------
+# 更改密碼 API
+# -------------------------
+@app.post("/change-password", response_model=ChangePasswordResponse)
+async def change_password(req: ChangePasswordRequest, db: AsyncSession = Depends(get_db)):
+    """
+    更改用戶密碼
+    - username: 用戶名
+    - currentPassword: 目前密碼
+    - newPassword: 新密碼
+    """
+    username = req.username.strip()
+    current_password = req.currentPassword
+    new_password = req.newPassword
+    
+    if not username or not current_password or not new_password:
+        raise HTTPException(400, "請填寫所有欄位")
+    
+    if len(new_password) < 4:
+        raise HTTPException(400, "新密碼至少需要 4 個字元")
+    
+    # 計算密碼 hash
+    current_hash = hash_password(current_password)
+    new_hash = hash_password(new_password)
+    
+    try:
+        # 查詢用戶
+        result = await db.execute(
+            text("SELECT id, password_hash FROM users WHERE username = :username"),
+            {"username": username}
+        )
+        user = result.fetchone()
+        
+        if not user:
+            raise HTTPException(404, "用戶不存在")
+        
+        # 驗證目前密碼
+        if user.password_hash != current_hash:
+            raise HTTPException(401, "目前密碼不正確")
+        
+        # 更新密碼
+        await db.execute(
+            text("UPDATE users SET password_hash = :new_hash WHERE username = :username"),
+            {"new_hash": new_hash, "username": username}
+        )
+        await db.commit()
+        
+        logger.info(f"用戶 {username} 成功更改密碼")
+        
+        return ChangePasswordResponse(success=True, message="密碼已更改")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"更改密碼失敗: {type(e).__name__}: {e}")
+        raise HTTPException(500, "更改密碼失敗，請稍後再試")
 
 
 # -------------------------

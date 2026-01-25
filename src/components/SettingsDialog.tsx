@@ -138,21 +138,19 @@ export const SettingsDialog = ({
     setIsChangingPassword(true);
 
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/auth-change-password`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({
-            username,
-            currentPassword,
-            newPassword,
-          }),
-        }
-      );
+      // 呼叫 Python 後端更改密碼 API
+      const API_BASE_URL = "http://localhost:8000";
+      const response = await fetch(`${API_BASE_URL}/change-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username,
+          currentPassword,
+          newPassword,
+        }),
+      });
 
       const data = await response.json();
 
