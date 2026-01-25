@@ -1,6 +1,5 @@
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { LogOut } from "lucide-react";
+import { UserMenu } from "./UserMenu";
 
 interface HeaderProps {
   watchingCount: number;
@@ -8,10 +7,23 @@ interface HeaderProps {
   onliveCount: number;
   offliveCount: number;
   isConnected: boolean;
+  username: string;
+  avatarUrl?: string;
   onLogout: () => void;
+  onAvatarChange: (url: string) => void;
 }
 
-export const Header = ({ watchingCount, cachedCount, onliveCount, offliveCount, isConnected, onLogout }: HeaderProps) => {
+export const Header = ({ 
+  watchingCount, 
+  cachedCount, 
+  onliveCount, 
+  offliveCount, 
+  isConnected, 
+  username,
+  avatarUrl,
+  onLogout,
+  onAvatarChange 
+}: HeaderProps) => {
   return (
     <header className="bg-sidebar text-sidebar-foreground px-4 py-3 flex items-center justify-between">
       <h1 className="text-lg font-semibold text-[hsl(var(--primary))]">
@@ -42,15 +54,12 @@ export const Header = ({ watchingCount, cachedCount, onliveCount, offliveCount, 
           cached {cachedCount}
         </Badge>
         
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={onLogout}
-          className="bg-sidebar-accent text-sidebar-foreground border-sidebar-border hover:bg-sidebar-border"
-        >
-          登出
-          <LogOut className="w-4 h-4 ml-1" />
-        </Button>
+        <UserMenu 
+          username={username}
+          avatarUrl={avatarUrl}
+          onLogout={onLogout}
+          onAvatarChange={onAvatarChange}
+        />
       </div>
     </header>
   );
