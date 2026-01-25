@@ -1,8 +1,10 @@
 import { useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { AddMonitorForm } from "@/components/AddMonitorForm";
 import { MonitorList, MonitorItem } from "@/components/MonitorList";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 // Mock data for demonstration
 const generateMockData = (): MonitorItem[] => {
@@ -27,11 +29,28 @@ const generateMockData = (): MonitorItem[] => {
 
 const Index = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const { loading, isAuthenticated, signOut } = useAuth();
   const [monitors, setMonitors] = useState<MonitorItem[]>(generateMockData);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
   const [statusFilter, setStatusFilter] = useState("all");
   const [autoRefreshInterval, setAutoRefreshInterval] = useState("30");
+
+  // Redirect to login if not authenticated
+  if (!loading && !isAuthenticated) {
+    navigate("/login");
+    return null;
+  }
+
+  // Show loading while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground">載入中...</div>
+      </div>
+    );
+  }
   
   const filteredMonitors = monitors.filter(m => {
     if (statusFilter === "all") return true;
@@ -43,7 +62,7 @@ const Index = () => {
     currentPage * pageSize
   );
 
-  const handleAddMonitor = useCallback((videoId: string, name?: string) => {
+  const handleAddMonitor = (videoId: string, name?: string) => {
     const newMonitor: MonitorItem = {
       id: `item-${Date.now()}`,
       videoId: videoId.replace(/.*(?:v=|\/v\/|youtu\.be\/|embed\/)([^#&?]*).*/, '$1').substring(0, 11),
@@ -59,42 +78,44 @@ const Index = () => {
       title: "新增成功",
       description: `已新增監控: ${name || videoId}`,
     });
-  }, [toast]);
+  };
 
-  const handleDeleteMonitor = useCallback((id: string) => {
+  const handleDeleteMonitor = (id: string) => {
     setMonitors(prev => prev.filter(m => m.id !== id));
     toast({
       title: "刪除成功",
       description: "已移除監控項目",
     });
-  }, [toast]);
+  };
 
-  const handleManualRefresh = useCallback(() => {
+  const handleManualRefresh = () => {
     toast({
       title: "正在刷新",
       description: "手動刷新監控列表...",
     });
-  }, [toast]);
+  };
 
-  const handleWatch = useCallback((videoId: string) => {
+  const handleWatch = (videoId: string) => {
     window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
-  }, []);
+  };
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = async () => {
+    await signOut();
     toast({
       title: "登出成功",
       description: "您已成功登出",
     });
-  }, [toast]);
+    navigate("/login");
+  };
 
-  const handlePageChange = useCallback((page: number) => {
+  const handlePageChange = (page: number) => {
     setCurrentPage(page);
-  }, []);
+  };
 
-  const handlePageSizeChange = useCallback((size: number) => {
+  const handlePageSizeChange = (size: number) => {
     setPageSize(size);
     setCurrentPage(1);
-  }, []);
+  };
 
   const lastUpdate = new Date().toLocaleString('zh-TW', {
     year: 'numeric',
