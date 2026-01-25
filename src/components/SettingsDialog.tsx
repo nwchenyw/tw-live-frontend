@@ -16,10 +16,10 @@ import { Camera, Eye, EyeOff, Loader2, Trash2 } from "lucide-react";
 // 從環境變數讀取後端 URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://tw-live.nwchenyw.com";
 
-// localStorage key for avatar
-const getAvatarStorageKey = (userId: string) => `avatar_${userId}`;
+// localStorage key for avatar URL (stores server URL, not base64)
+const getAvatarStorageKey = (userId: string) => `avatar_url_${userId}`;
 
-// 從 localStorage 讀取頭像
+// 從 localStorage 讀取頭像 URL
 export const getStoredAvatar = (userId: string): string | null => {
   try {
     return localStorage.getItem(getAvatarStorageKey(userId));
@@ -28,17 +28,16 @@ export const getStoredAvatar = (userId: string): string | null => {
   }
 };
 
-// 儲存頭像到 localStorage
-const saveAvatarToStorage = (userId: string, base64: string): void => {
+// 儲存頭像 URL 到 localStorage
+const saveAvatarUrlToStorage = (userId: string, url: string): void => {
   try {
-    localStorage.setItem(getAvatarStorageKey(userId), base64);
+    localStorage.setItem(getAvatarStorageKey(userId), url);
   } catch (e) {
-    console.error("無法儲存頭像到 localStorage:", e);
-    throw new Error("儲存空間不足，請嘗試使用較小的圖片");
+    console.error("無法儲存頭像 URL:", e);
   }
 };
 
-// 從 localStorage 刪除頭像
+// 從 localStorage 刪除頭像 URL
 const removeAvatarFromStorage = (userId: string): void => {
   try {
     localStorage.removeItem(getAvatarStorageKey(userId));
@@ -80,7 +79,7 @@ export const SettingsDialog = ({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  // 當 dialog 開啟時，從 localStorage 讀取頭像
+  // 當 dialog 開啟時，從 localStorage 讀取頭像 URL
   useEffect(() => {
     if (open && userId) {
       const storedAvatar = getStoredAvatar(userId);
@@ -110,11 +109,11 @@ export const SettingsDialog = ({
       return;
     }
 
-    // Validate file size (max 500KB for localStorage)
-    if (file.size > 500 * 1024) {
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
       toast({
         title: "錯誤",
-        description: "圖片大小不能超過 500KB（localStorage 限制）",
+        description: "圖片大小不能超過 2MB",
         variant: "destructive",
       });
       return;
@@ -123,58 +122,91 @@ export const SettingsDialog = ({
     setIsUploadingAvatar(true);
 
     try {
-      // Convert to Base64
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        
-        try {
-          // Save to localStorage
-          saveAvatarToStorage(userId, base64);
-          setPreviewUrl(base64);
-          onAvatarChange(base64);
-          
-          toast({
-            title: "成功",
-            description: "頭像已儲存到本地",
-          });
-        } catch (error) {
-          toast({
-            title: "儲存失敗",
-            description: error instanceof Error ? error.message : "無法儲存頭像",
-            variant: "destructive",
-          });
-        } finally {
-          setIsUploadingAvatar(false);
-        }
-      };
-      reader.onerror = () => {
-        toast({
-          title: "讀取失敗",
-          description: "無法讀取圖片檔案",
-          variant: "destructive",
-        });
-        setIsUploadingAvatar(false);
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
+      // Create FormData for upload
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("user_id", userId);
+
+      // Upload to backend
+      const response = await fetch(`${API_BASE_URL}/upload-avatar`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || errorData.error || "上傳失敗");
+      }
+
+      const data = await response.json();
+      const avatarUrl = data.avatar_url;
+
+      // Construct full URL if it's a relative path
+      const fullAvatarUrl = avatarUrl.startsWith("http") 
+        ? avatarUrl 
+        : `${API_BASE_URL}${avatarUrl}`;
+
+      // Save URL to localStorage
+      saveAvatarUrlToStorage(userId, fullAvatarUrl);
+      setPreviewUrl(fullAvatarUrl);
+      onAvatarChange(fullAvatarUrl);
+
       toast({
-        title: "錯誤",
-        description: "處理圖片時發生錯誤",
+        title: "成功",
+        description: "頭像已上傳",
+      });
+    } catch (error) {
+      console.error("Avatar upload error:", error);
+      toast({
+        title: "上傳失敗",
+        description: error instanceof Error ? error.message : "無法上傳頭像",
         variant: "destructive",
       });
+    } finally {
       setIsUploadingAvatar(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
-  const handleRemoveAvatar = () => {
-    removeAvatarFromStorage(userId);
-    setPreviewUrl(undefined);
-    onAvatarChange("");
-    toast({
-      title: "成功",
-      description: "頭像已移除",
-    });
+  const handleRemoveAvatar = async () => {
+    setIsUploadingAvatar(true);
+    
+    try {
+      // Call backend to delete avatar
+      const response = await fetch(`${API_BASE_URL}/delete-avatar/${userId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || errorData.error || "刪除失敗");
+      }
+
+      removeAvatarFromStorage(userId);
+      setPreviewUrl(undefined);
+      onAvatarChange("");
+      
+      toast({
+        title: "成功",
+        description: "頭像已移除",
+      });
+    } catch (error) {
+      // If delete endpoint doesn't exist, just clear locally
+      console.warn("Delete avatar endpoint may not exist:", error);
+      removeAvatarFromStorage(userId);
+      setPreviewUrl(undefined);
+      onAvatarChange("");
+      
+      toast({
+        title: "成功",
+        description: "頭像已移除",
+      });
+    } finally {
+      setIsUploadingAvatar(false);
+    }
   };
 
   const handlePasswordChange = async () => {
@@ -295,14 +327,14 @@ export const SettingsDialog = ({
               />
               <p className="text-sm text-muted-foreground text-center">
                 點擊相機圖示上傳頭像<br />
-                支援 JPG、PNG 格式，最大 500KB<br />
-                <span className="text-xs text-primary">頭像將儲存在瀏覽器本地</span>
+                支援 JPG、PNG 格式，最大 2MB
               </p>
               {previewUrl && (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleRemoveAvatar}
+                  disabled={isUploadingAvatar}
                   className="text-destructive hover:text-destructive"
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
