@@ -225,6 +225,7 @@ const Index = () => {
         offliveCount={offlineCount}
         isConnected={isConnected}
         username={user?.username || "User"}
+        userId={user?.id || ""}
         avatarUrl={avatarUrl}
         onLogout={handleLogout}
         onAvatarChange={handleAvatarChange}

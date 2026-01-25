@@ -12,12 +12,13 @@ import { SettingsDialog } from "./SettingsDialog";
 
 interface UserMenuProps {
   username: string;
+  userId: string;
   avatarUrl?: string;
   onLogout: () => void;
   onAvatarChange: (url: string) => void;
 }
 
-export const UserMenu = ({ username, avatarUrl, onLogout, onAvatarChange }: UserMenuProps) => {
+export const UserMenu = ({ username, userId, avatarUrl, onLogout, onAvatarChange }: UserMenuProps) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const getInitials = (name: string) => {
@@ -58,6 +59,7 @@ export const UserMenu = ({ username, avatarUrl, onLogout, onAvatarChange }: User
         open={isSettingsOpen}
         onOpenChange={setIsSettingsOpen}
         username={username}
+        userId={userId}
         currentAvatarUrl={avatarUrl}
         onAvatarChange={onAvatarChange}
       />
