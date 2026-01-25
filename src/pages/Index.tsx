@@ -139,7 +139,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header
-        watchingCount={liveCount}
+        watchingCount={monitors.length}
         cachedCount={monitors.length}
         onliveCount={liveCount}
         offliveCount={offlineCount}
