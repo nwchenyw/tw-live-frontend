@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Camera, Eye, EyeOff, Loader2, Trash2 } from "lucide-react";
 
 // 從環境變數讀取後端 URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://tw-live.nwchenyw.com";
 
 // localStorage key for avatar
 const getAvatarStorageKey = (userId: string) => `avatar_${userId}`;

@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 
-// 從環境變數讀取後端 URL，預設為 localhost:8000
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+// 從環境變數讀取後端 URL，預設為正式環境
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://tw-live.nwchenyw.com";
 
 export interface VideoItem {
   video_id: string;
