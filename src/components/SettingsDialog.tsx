@@ -13,6 +13,9 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Camera, Eye, EyeOff, Loader2, Trash2 } from "lucide-react";
 
+// 從環境變數讀取後端 URL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
 // localStorage key for avatar
 const getAvatarStorageKey = (userId: string) => `avatar_${userId}`;
 
@@ -206,8 +209,6 @@ export const SettingsDialog = ({
     setIsChangingPassword(true);
 
     try {
-      // 呼叫 Python 後端更改密碼 API
-      const API_BASE_URL = "http://localhost:8000";
       const response = await fetch(`${API_BASE_URL}/change-password`, {
         method: "POST",
         headers: {
