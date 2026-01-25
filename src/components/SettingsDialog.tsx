@@ -37,8 +37,8 @@ export const getStoredAvatar = (userId: string): string | null => {
   }
 };
 
-// 儲存頭像 URL 到 localStorage
-const saveAvatarUrlToStorage = (userId: string, url: string): void => {
+// 儲存頭像 URL 到 localStorage (export for use in Index.tsx)
+export const saveAvatarUrlToStorage = (userId: string, url: string): void => {
   try {
     localStorage.setItem(getAvatarStorageKey(userId), url);
   } catch (e) {
