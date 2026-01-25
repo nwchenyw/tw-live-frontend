@@ -23,12 +23,12 @@ serve(async (req) => {
   let client: Client | null = null;
 
   try {
-    const { username, password } = await req.json();
+    const { username, password, adminPassword } = await req.json();
 
     // Validate input
-    if (!username || !password) {
+    if (!username || !password || !adminPassword) {
       return new Response(
-        JSON.stringify({ error: "Username and password are required" }),
+        JSON.stringify({ error: "Username, password, and admin password are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -47,14 +47,31 @@ serve(async (req) => {
       );
     }
 
-    // Connect to MySQL (don't specify db in connection, use backticks in queries for db names with dots)
+    // Connect to MySQL
     const dbName = Deno.env.get("MYSQL_DATABASE") || "";
+    const salt = Deno.env.get("PASSWORD_SALT") || "tw_live_salt_2024";
+    
     client = await new Client().connect({
       hostname: Deno.env.get("MYSQL_HOST") || "localhost",
       port: parseInt(Deno.env.get("MYSQL_PORT") || "3306"),
       username: Deno.env.get("MYSQL_USERNAME") || "",
       password: Deno.env.get("MYSQL_PASSWORD") || "",
     });
+
+    // Verify admin password first
+    const adminPasswordHash = await hashPassword(adminPassword, salt);
+    const adminUsers = await client.query(
+      `SELECT id FROM \`${dbName}\`.users WHERE username = 'admin' AND password_hash = ? LIMIT 1`,
+      [adminPasswordHash]
+    );
+
+    if (!adminUsers || adminUsers.length === 0) {
+      await client.close();
+      return new Response(
+        JSON.stringify({ error: "Invalid admin password" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Check if username already exists
     const existingUsers = await client.query(
@@ -71,7 +88,6 @@ serve(async (req) => {
     }
 
     // Hash password and create user
-    const salt = Deno.env.get("PASSWORD_SALT") || "tw_live_salt_2024";
     const passwordHash = await hashPassword(password, salt);
     
     const result = await client.execute(

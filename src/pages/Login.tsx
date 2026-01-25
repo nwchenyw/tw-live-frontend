@@ -16,8 +16,10 @@ const Login = () => {
   const { login, signup, isAuthenticated } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
 
@@ -43,7 +45,7 @@ const Login = () => {
 
     try {
       if (isSignUp) {
-        const { error } = await signup(username, password);
+        const { error } = await signup(username, password, adminPassword);
         if (error) throw new Error(error);
         toast({
           title: "註冊成功",
@@ -123,20 +125,48 @@ const Login = () => {
             </button>
           </div>
 
-          {/* Remember Me */}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="remember"
-              checked={rememberMe}
-              onCheckedChange={(checked) => setRememberMe(checked === true)}
-            />
-            <Label
-              htmlFor="remember"
-              className="text-sm text-muted-foreground cursor-pointer"
-            >
-              記住我
-            </Label>
-          </div>
+          {/* Admin Password Input (only for signup) */}
+          {isSignUp && (
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type={showAdminPassword ? "text" : "password"}
+                placeholder="Admin Password (管理員密碼)"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                className="pl-10 pr-10 h-11 bg-background border-input"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowAdminPassword(!showAdminPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showAdminPassword ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Remember Me (only for login) */}
+          {!isSignUp && (
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="remember"
+                checked={rememberMe}
+                onCheckedChange={(checked) => setRememberMe(checked === true)}
+              />
+              <Label
+                htmlFor="remember"
+                className="text-sm text-muted-foreground cursor-pointer"
+              >
+                記住我
+              </Label>
+            </div>
+          )}
 
           {/* Login Button */}
           <Button
