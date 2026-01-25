@@ -1,56 +1,121 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { AddMonitorForm } from "@/components/AddMonitorForm";
 import { MonitorList, MonitorItem } from "@/components/MonitorList";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-
-// Mock data for demonstration
-const generateMockData = (): MonitorItem[] => {
-  const mockItems: MonitorItem[] = [];
-  const baseTime = new Date();
-  
-  for (let i = 0; i < 323; i++) {
-    const time = new Date(baseTime.getTime() - i * 1000);
-    mockItems.push({
-      id: `item-${i}`,
-      videoId: `${['ByNEL0Ton4', 'egDiYN-P7A', 'FwTmj0nxGQ', 'tLjNNPdw1Q', 'JhoMGoAFFc'][i % 5]}`,
-      name: i % 3 === 0 ? undefined : `Channel ${i + 1}`,
-      thumbnail: `https://i.ytimg.com/vi/${['ByNEL0Ton4', 'egDiYN-P7A', 'FwTmj0nxGQ', 'tLjNNPdw1Q', 'JhoMGoAFFc'][i % 5]}/mqdefault.jpg`,
-      status: i % 10 === 0 ? "offline" : "live",
-      details: "尚未檢測",
-      checkTime: `${time.getFullYear()}/${time.getMonth() + 1}/${time.getDate()} 下午${time.getHours()}:${time.getMinutes().toString().padStart(2, '0')}:${time.getSeconds().toString().padStart(2, '0')}`,
-    });
-  }
-  
-  return mockItems;
-};
+import { useYTLiveApi, StatusItem } from "@/hooks/useYTLiveApi";
 
 const AVATAR_STORAGE_KEY = "yt_live_avatar";
 
 const Index = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { user, loading, isAuthenticated, signOut } = useAuth();
-  const [monitors, setMonitors] = useState<MonitorItem[]>(generateMockData);
+  const { user, loading: authLoading, isAuthenticated, signOut } = useAuth();
+  const { fetchVideos, fetchStatus, addVideo, deleteVideo, checkHealth } = useYTLiveApi();
+  
+  const [monitors, setMonitors] = useState<MonitorItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
   const [statusFilter, setStatusFilter] = useState("all");
   const [autoRefreshInterval, setAutoRefreshInterval] = useState("30");
+  const [isConnected, setIsConnected] = useState(false);
+  const [healthStats, setHealthStats] = useState({ watching: 0, cached: 0 });
+  const [lastUpdate, setLastUpdate] = useState<string>("");
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(() => {
     return localStorage.getItem(AVATAR_STORAGE_KEY) || undefined;
   });
 
+  // Load videos and status from Python backend
+  const loadData = useCallback(async () => {
+    try {
+      const [videos, statuses, health] = await Promise.all([
+        fetchVideos(),
+        fetchStatus(),
+        checkHealth(),
+      ]);
+
+      setIsConnected(health.ok);
+      setHealthStats({ watching: health.watching, cached: health.cached });
+
+      // Create a map of video_id -> status
+      const statusMap = new Map<string, StatusItem>();
+      statuses.forEach((s) => statusMap.set(s.video_id, s));
+
+      // Merge videos with their status
+      const monitorItems: MonitorItem[] = videos.map((v, index) => {
+        const status = statusMap.get(v.video_id);
+        const liveStatus = status?.live_status?.toUpperCase();
+        
+        let monitorStatus: "live" | "offline" | "error" = "offline";
+        if (status?.is_live_now) {
+          monitorStatus = "live";
+        } else if (status?.note && status.note.includes("error")) {
+          monitorStatus = "error";
+        }
+
+        return {
+          id: `video-${v.video_id}-${index}`,
+          videoId: v.video_id,
+          name: v.name || undefined,
+          thumbnail: `https://i.ytimg.com/vi/${v.video_id}/mqdefault.jpg`,
+          status: monitorStatus,
+          details: liveStatus || status?.note || "尚未檢測",
+          checkTime: status?.checked_at
+            ? new Date(status.checked_at).toLocaleString("zh-TW")
+            : "尚未檢測",
+        };
+      });
+
+      setMonitors(monitorItems);
+      setLastUpdate(
+        new Date().toLocaleString("zh-TW", {
+          year: "numeric",
+          month: "numeric",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        })
+      );
+    } catch (err) {
+      console.error("Failed to load data:", err);
+      setIsConnected(false);
+      toast({
+        variant: "destructive",
+        title: "連線失敗",
+        description: "無法連線到後端伺服器，請確認 Python 後端已啟動",
+      });
+    }
+  }, [fetchVideos, fetchStatus, checkHealth, toast]);
+
+  // Initial load
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      loadData();
+    }
+  }, [authLoading, isAuthenticated, loadData]);
+
+  // Auto refresh
+  useEffect(() => {
+    const interval = parseInt(autoRefreshInterval);
+    if (interval <= 0 || !isAuthenticated) return;
+
+    const timer = setInterval(loadData, interval * 1000);
+    return () => clearInterval(timer);
+  }, [autoRefreshInterval, isAuthenticated, loadData]);
+
   useEffect(() => {
     // Redirect to login if not authenticated
-    if (!loading && !isAuthenticated) {
+    if (!authLoading && !isAuthenticated) {
       navigate("/login");
     }
-  }, [loading, isAuthenticated, navigate]);
+  }, [authLoading, isAuthenticated, navigate]);
 
   // Show loading while checking auth
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-muted-foreground">載入中...</div>
@@ -73,33 +138,48 @@ const Index = () => {
     currentPage * pageSize
   );
 
-  const handleAddMonitor = (videoId: string, name?: string) => {
-    const newMonitor: MonitorItem = {
-      id: `item-${Date.now()}`,
-      videoId: videoId.replace(/.*(?:v=|\/v\/|youtu\.be\/|embed\/)([^#&?]*).*/, '$1').substring(0, 11),
-      name,
-      thumbnail: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
-      status: "live",
-      details: "尚未檢測",
-      checkTime: new Date().toLocaleString('zh-TW'),
-    };
-    
-    setMonitors(prev => [newMonitor, ...prev]);
-    toast({
-      title: "新增成功",
-      description: `已新增監控: ${name || videoId}`,
-    });
+  const handleAddMonitor = async (videoId: string, name?: string) => {
+    try {
+      const result = await addVideo(videoId, name);
+      toast({
+        title: "新增成功",
+        description: `已新增監控: ${name || result.video_id}`,
+      });
+      // Reload data to get the updated list
+      await loadData();
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "新增失敗",
+        description: err instanceof Error ? err.message : "無法新增監控",
+      });
+    }
   };
 
-  const handleDeleteMonitor = (id: string) => {
-    setMonitors(prev => prev.filter(m => m.id !== id));
-    toast({
-      title: "刪除成功",
-      description: "已移除監控項目",
-    });
+  const handleDeleteMonitor = async (id: string) => {
+    // Extract videoId from the id (format: video-{videoId}-{index})
+    const parts = id.split("-");
+    const videoId = parts.slice(1, -1).join("-"); // Handle video IDs with dashes
+
+    try {
+      await deleteVideo(videoId);
+      toast({
+        title: "刪除成功",
+        description: "已移除監控項目",
+      });
+      // Reload data to get the updated list
+      await loadData();
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "刪除失敗",
+        description: err instanceof Error ? err.message : "無法刪除監控",
+      });
+    }
   };
 
   const handleManualRefresh = () => {
+    loadData();
     toast({
       title: "正在刷新",
       description: "手動刷新監控列表...",
@@ -133,27 +213,17 @@ const Index = () => {
     setCurrentPage(1);
   };
 
-  const lastUpdate = new Date().toLocaleString('zh-TW', {
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true,
-  });
-
   const liveCount = monitors.filter(m => m.status === "live").length;
   const offlineCount = monitors.filter(m => m.status === "offline").length;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header
-        watchingCount={monitors.length}
-        cachedCount={monitors.length}
+        watchingCount={healthStats.watching}
+        cachedCount={healthStats.cached}
         onliveCount={liveCount}
         offliveCount={offlineCount}
-        isConnected={true}
+        isConnected={isConnected}
         username={user?.username || "User"}
         avatarUrl={avatarUrl}
         onLogout={handleLogout}
