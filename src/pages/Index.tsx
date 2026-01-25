@@ -1,12 +1,149 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState, useCallback } from "react";
+import { Header } from "@/components/Header";
+import { AddMonitorForm } from "@/components/AddMonitorForm";
+import { MonitorList, MonitorItem } from "@/components/MonitorList";
+import { useToast } from "@/hooks/use-toast";
+
+// Mock data for demonstration
+const generateMockData = (): MonitorItem[] => {
+  const mockItems: MonitorItem[] = [];
+  const baseTime = new Date();
+  
+  for (let i = 0; i < 323; i++) {
+    const time = new Date(baseTime.getTime() - i * 1000);
+    mockItems.push({
+      id: `item-${i}`,
+      videoId: `${['ByNEL0Ton4', 'egDiYN-P7A', 'FwTmj0nxGQ', 'tLjNNPdw1Q', 'JhoMGoAFFc'][i % 5]}`,
+      name: i % 3 === 0 ? undefined : `Channel ${i + 1}`,
+      thumbnail: `https://i.ytimg.com/vi/${['ByNEL0Ton4', 'egDiYN-P7A', 'FwTmj0nxGQ', 'tLjNNPdw1Q', 'JhoMGoAFFc'][i % 5]}/mqdefault.jpg`,
+      status: i % 10 === 0 ? "offline" : "live",
+      details: "尚未檢測",
+      checkTime: `${time.getFullYear()}/${time.getMonth() + 1}/${time.getDate()} 下午${time.getHours()}:${time.getMinutes().toString().padStart(2, '0')}:${time.getSeconds().toString().padStart(2, '0')}`,
+    });
+  }
+  
+  return mockItems;
+};
 
 const Index = () => {
+  const { toast } = useToast();
+  const [monitors, setMonitors] = useState<MonitorItem[]>(generateMockData);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState("30");
+  
+  const filteredMonitors = monitors.filter(m => {
+    if (statusFilter === "all") return true;
+    return m.status === statusFilter;
+  });
+
+  const paginatedMonitors = filteredMonitors.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  const handleAddMonitor = useCallback((videoId: string, name?: string) => {
+    const newMonitor: MonitorItem = {
+      id: `item-${Date.now()}`,
+      videoId: videoId.replace(/.*(?:v=|\/v\/|youtu\.be\/|embed\/)([^#&?]*).*/, '$1').substring(0, 11),
+      name,
+      thumbnail: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+      status: "live",
+      details: "尚未檢測",
+      checkTime: new Date().toLocaleString('zh-TW'),
+    };
+    
+    setMonitors(prev => [newMonitor, ...prev]);
+    toast({
+      title: "新增成功",
+      description: `已新增監控: ${name || videoId}`,
+    });
+  }, [toast]);
+
+  const handleDeleteMonitor = useCallback((id: string) => {
+    setMonitors(prev => prev.filter(m => m.id !== id));
+    toast({
+      title: "刪除成功",
+      description: "已移除監控項目",
+    });
+  }, [toast]);
+
+  const handleManualRefresh = useCallback(() => {
+    toast({
+      title: "正在刷新",
+      description: "手動刷新監控列表...",
+    });
+  }, [toast]);
+
+  const handleWatch = useCallback((videoId: string) => {
+    window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    toast({
+      title: "登出成功",
+      description: "您已成功登出",
+    });
+  }, [toast]);
+
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(page);
+  }, []);
+
+  const handlePageSizeChange = useCallback((size: number) => {
+    setPageSize(size);
+    setCurrentPage(1);
+  }, []);
+
+  const lastUpdate = new Date().toLocaleString('zh-TW', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  });
+
+  const liveCount = monitors.filter(m => m.status === "live").length;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-background flex flex-col">
+      <Header
+        watchingCount={liveCount}
+        cachedCount={monitors.length}
+        isConnected={true}
+        onLogout={handleLogout}
+      />
+      
+      <main className="flex-1 p-6">
+        <div className="max-w-7xl mx-auto flex gap-6">
+          <div className="w-[360px] flex-shrink-0">
+            <AddMonitorForm
+              onAdd={handleAddMonitor}
+              onManualRefresh={handleManualRefresh}
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+              autoRefreshInterval={autoRefreshInterval}
+              onAutoRefreshIntervalChange={setAutoRefreshInterval}
+              currentRefreshInterval={parseInt(autoRefreshInterval) || 30}
+            />
+          </div>
+          
+          <MonitorList
+            items={paginatedMonitors}
+            totalItems={filteredMonitors.length}
+            currentPage={currentPage}
+            pageSize={pageSize}
+            lastUpdate={lastUpdate}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+            onDelete={handleDeleteMonitor}
+            onWatch={handleWatch}
+          />
+        </div>
+      </main>
     </div>
   );
 };
