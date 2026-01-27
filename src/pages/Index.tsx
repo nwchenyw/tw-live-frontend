@@ -6,6 +6,7 @@ import { MonitorList, MonitorItem } from "@/components/MonitorList";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useYTLiveApi, StatusItem } from "@/hooks/useYTLiveApi";
+import { useAvatarDb } from "@/hooks/useAvatarDb";
 import { getStoredAvatar, saveAvatarUrlToStorage } from "@/components/SettingsDialog";
 
 const withCacheBust = (url: string) => {
@@ -17,6 +18,7 @@ const Index = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user, loading: authLoading, isAuthenticated, signOut } = useAuth();
+  const { getAvatarUrl: getAvatarFromDb } = useAvatarDb();
   const { fetchVideos, fetchStatus, addVideo, deleteVideo, checkHealth, getAvatarUrl } = useYTLiveApi();
   
   const [monitors, setMonitors] = useState<MonitorItem[]>([]);
@@ -29,25 +31,25 @@ const Index = () => {
   const [lastUpdate, setLastUpdate] = useState<string>("");
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
 
-  // 載入使用者頭像：優先從後端 API 撈，沒有再用 localStorage
+  // 載入使用者頭像：優先從 MySQL DB 查表，沒有再用 localStorage
   useEffect(() => {
     const loadAvatar = async () => {
       if (!user?.id) return;
       
       try {
-        // 1. 先嘗試從後端 API 獲取頭像
-        const serverAvatar = await getAvatarUrl(user.id);
-        if (serverAvatar) {
+        // 1. 先嘗試從 MySQL DB 獲取頭像 URL
+        const dbAvatarUrl = await getAvatarFromDb(user.id);
+        if (dbAvatarUrl) {
           // 同步到 localStorage
-          saveAvatarUrlToStorage(user.id, serverAvatar);
-          setAvatarUrl(withCacheBust(serverAvatar));
+          saveAvatarUrlToStorage(user.id, dbAvatarUrl);
+          setAvatarUrl(withCacheBust(dbAvatarUrl));
           return;
         }
       } catch (err) {
-        console.warn("Failed to fetch avatar from server:", err);
+        console.warn("Failed to fetch avatar from DB:", err);
       }
       
-      // 2. 後端沒有，fallback 到 localStorage
+      // 2. DB 沒有，fallback 到 localStorage
       const storedAvatar = getStoredAvatar(user.id);
       if (storedAvatar) {
         setAvatarUrl(withCacheBust(storedAvatar));
@@ -55,7 +57,7 @@ const Index = () => {
     };
     
     loadAvatar();
-  }, [user?.id, getAvatarUrl]);
+  }, [user?.id, getAvatarFromDb]);
 
   // Load videos and status from Python backend
   const loadData = useCallback(async () => {

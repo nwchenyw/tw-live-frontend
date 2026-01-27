@@ -13,10 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useAvatarDb } from "@/hooks/useAvatarDb";
 import { Camera, Eye, EyeOff, Loader2, Trash2, Check, X, ShieldCheck } from "lucide-react";
 import { SecurityQuestionDialog } from "@/components/SecurityQuestionDialog";
 
-// 從環境變數讀取後端 URL
+// 從環境變數讀取後端 URL (用於上傳檔案到後端)
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://twbackend.nwchenyw.com";
 
 // localStorage key for avatar URL (stores server URL, not base64)
@@ -139,6 +140,7 @@ export const SettingsDialog = ({
   onAvatarChange,
 }: SettingsDialogProps) => {
   const { toast } = useToast();
+  const { saveAvatarFilename, deleteAvatarFromDb } = useAvatarDb();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   
@@ -270,14 +272,19 @@ export const SettingsDialog = ({
       }
 
       const data = await response.json();
+      // 後端回傳的是 avatar_url 和 filename
       const avatarUrl = data.avatar_url;
+      const filename = data.filename || avatarUrl.split('/').pop();
 
       // Construct full URL if it's a relative path
       const fullAvatarUrl = avatarUrl.startsWith("http") 
         ? avatarUrl 
         : `${API_BASE_URL}${avatarUrl}`;
 
-      // Save URL to localStorage
+      // 儲存檔名到 MySQL DB
+      await saveAvatarFilename(userId, filename);
+
+      // Save URL to localStorage as fallback
       saveAvatarUrlToStorage(userId, fullAvatarUrl);
       const displayUrl = withCacheBust(fullAvatarUrl);
       setPreviewUrl(displayUrl);
@@ -306,7 +313,7 @@ export const SettingsDialog = ({
     setIsUploadingAvatar(true);
     
     try {
-      // Call backend to delete avatar
+      // Call backend to delete avatar file
       const response = await fetch(`${API_BASE_URL}/delete-avatar/${userId}`, {
         method: "DELETE",
       });
@@ -315,6 +322,9 @@ export const SettingsDialog = ({
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || errorData.error || "刪除失敗");
       }
+
+      // 從 MySQL DB 刪除記錄
+      await deleteAvatarFromDb(userId);
 
       removeAvatarFromStorage(userId);
       setPreviewUrl(undefined);
@@ -327,6 +337,8 @@ export const SettingsDialog = ({
     } catch (error) {
       // If delete endpoint doesn't exist, just clear locally
       console.warn("Delete avatar endpoint may not exist:", error);
+      // 仍然嘗試從 DB 刪除
+      await deleteAvatarFromDb(userId);
       removeAvatarFromStorage(userId);
       setPreviewUrl(undefined);
       onAvatarChange("");
