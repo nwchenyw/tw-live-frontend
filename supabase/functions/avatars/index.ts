@@ -1,3 +1,4 @@
+// Avatars Edge Function - MySQL avatar mapping
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { Client } from "https://deno.land/x/mysql@v2.12.1/mod.ts";
 
