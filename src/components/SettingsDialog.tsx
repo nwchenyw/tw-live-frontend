@@ -372,10 +372,14 @@ export const SettingsDialog = ({
     setIsChangingPassword(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/change-password`, {
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+      const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/auth-change-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "apikey": SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
           username,
