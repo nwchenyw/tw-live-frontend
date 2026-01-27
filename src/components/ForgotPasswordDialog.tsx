@@ -76,11 +76,26 @@ export const ForgotPasswordDialog = ({ open, onOpenChange }: ForgotPasswordDialo
       setSecurityQuestion(data.securityQuestion);
       setStep("answer");
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "錯誤",
-        description: error.message || "無法取得安全問題",
-      });
+      const errorMessage = error.message || "";
+      if (errorMessage.includes("No security question set")) {
+        toast({
+          variant: "destructive",
+          title: "無法重設密碼",
+          description: "此帳戶尚未設定安全問題，請聯繫管理員協助重設密碼",
+        });
+      } else if (errorMessage.includes("User not found")) {
+        toast({
+          variant: "destructive",
+          title: "找不到使用者",
+          description: "請確認使用者名稱是否正確",
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "錯誤",
+          description: errorMessage || "無法取得安全問題",
+        });
+      }
     } finally {
       setIsLoading(false);
     }
