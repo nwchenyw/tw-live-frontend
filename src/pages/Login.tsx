@@ -4,12 +4,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { User, Lock, Eye, EyeOff } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { User, Lock, Eye, EyeOff, ShieldQuestion } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { ForgotPasswordDialog } from "@/components/ForgotPasswordDialog";
 
 const REMEMBER_KEY = "yt_live_remember_username";
+
+const SECURITY_QUESTIONS = [
+  "您的出生城市是？",
+  "您第一隻寵物的名字是？",
+  "您母親的娘家姓氏是？",
+  "您最喜歡的電影是？",
+  "您小學的名稱是？",
+  "您最好朋友的名字是？",
+  "您最喜歡的食物是？",
+  "您第一份工作的公司名稱是？",
+];
 
 const Login = () => {
   const navigate = useNavigate();
@@ -18,6 +36,8 @@ const Login = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
+  const [securityQuestion, setSecurityQuestion] = useState("");
+  const [securityAnswer, setSecurityAnswer] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showAdminPassword, setShowAdminPassword] = useState(false);
@@ -47,13 +67,22 @@ const Login = () => {
 
     try {
       if (isSignUp) {
-        const { error } = await signup(username, password, adminPassword);
+        // Validate security question
+        if (!securityQuestion || !securityAnswer.trim()) {
+          throw new Error("請選擇安全問題並填寫答案");
+        }
+        
+        const { error } = await signup(username, password, adminPassword, securityQuestion, securityAnswer);
         if (error) throw new Error(error);
         toast({
           title: "註冊成功",
           description: "帳號已建立，您可以直接登入。",
         });
         setIsSignUp(false);
+        // Clear signup fields
+        setAdminPassword("");
+        setSecurityQuestion("");
+        setSecurityAnswer("");
       } else {
         const { error } = await login(username, password);
         if (error) throw new Error(error);
@@ -129,28 +158,65 @@ const Login = () => {
 
           {/* Admin Password Input (only for signup) */}
           {isSignUp && (
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                type={showAdminPassword ? "text" : "password"}
-                placeholder="Admin Password (管理員密碼)"
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                className="pl-10 pr-10 h-11 bg-background border-input"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowAdminPassword(!showAdminPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {showAdminPassword ? (
-                  <EyeOff className="w-4 h-4" />
-                ) : (
-                  <Eye className="w-4 h-4" />
-                )}
-              </button>
-            </div>
+            <>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  type={showAdminPassword ? "text" : "password"}
+                  placeholder="Admin Password (管理員密碼)"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  className="pl-10 pr-10 h-11 bg-background border-input"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAdminPassword(!showAdminPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showAdminPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+
+              {/* Security Question */}
+              <div className="space-y-2">
+                <Label className="text-sm text-muted-foreground flex items-center gap-1">
+                  <ShieldQuestion className="w-4 h-4" />
+                  安全問題 (用於密碼重設)
+                </Label>
+                <Select value={securityQuestion} onValueChange={setSecurityQuestion}>
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="選擇一個安全問題" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SECURITY_QUESTIONS.map((question) => (
+                      <SelectItem key={question} value={question}>
+                        {question}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Security Answer */}
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="安全問題的答案"
+                  value={securityAnswer}
+                  onChange={(e) => setSecurityAnswer(e.target.value)}
+                  className="h-11 bg-background border-input"
+                  required={isSignUp}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  答案不區分大小寫
+                </p>
+              </div>
+            </>
           )}
 
           {/* Remember Me & Forgot Password (only for login) */}
