@@ -17,7 +17,7 @@ import { Camera, Eye, EyeOff, Loader2, Trash2, Check, X, ShieldCheck } from "luc
 import { SecurityQuestionDialog } from "@/components/SecurityQuestionDialog";
 
 // 從環境變數讀取後端 URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://tw-live.nwchenyw.com";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://twbackend.nwchenyw.com";
 
 // localStorage key for avatar URL (stores server URL, not base64)
 const getAvatarStorageKey = (userId: string) => `avatar_url_${userId}`;

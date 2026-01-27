@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 
 // 從環境變數讀取後端 URL，預設為正式環境
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://tw-live.nwchenyw.com";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://twbackend.nwchenyw.com";
 
 export interface VideoItem {
   video_id: string;
