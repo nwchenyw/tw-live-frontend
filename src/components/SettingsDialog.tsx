@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Camera, Eye, EyeOff, Loader2, Trash2, Check, X } from "lucide-react";
+import { Camera, Eye, EyeOff, Loader2, Trash2, Check, X, ShieldCheck } from "lucide-react";
+import { SecurityQuestionDialog } from "@/components/SecurityQuestionDialog";
 
 // 從環境變數讀取後端 URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://tw-live.nwchenyw.com";
@@ -159,6 +160,7 @@ export const SettingsDialog = ({
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [showSecurityQuestionDialog, setShowSecurityQuestionDialog] = useState(false);
 
   // 當 dialog 開啟時，從 localStorage 讀取頭像 URL
   useEffect(() => {
@@ -421,9 +423,10 @@ export const SettingsDialog = ({
         </DialogHeader>
 
         <Tabs defaultValue="avatar" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="avatar">頭像</TabsTrigger>
             <TabsTrigger value="password">更改密碼</TabsTrigger>
+            <TabsTrigger value="security">安全問題</TabsTrigger>
           </TabsList>
 
           <TabsContent value="avatar" className="space-y-4 mt-4">
@@ -599,7 +602,32 @@ export const SettingsDialog = ({
               )}
             </Button>
           </TabsContent>
+
+          <TabsContent value="security" className="space-y-4 mt-4">
+            <div className="text-center space-y-4">
+              <div className="flex justify-center">
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                  <ShieldCheck className="w-8 h-8 text-primary" />
+                </div>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold">安全問題設定</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  設定安全問題可在忘記密碼時用於驗證身份並重設密碼
+                </p>
+              </div>
+              <Button onClick={() => setShowSecurityQuestionDialog(true)} className="w-full">
+                設定安全問題
+              </Button>
+            </div>
+          </TabsContent>
         </Tabs>
+
+        <SecurityQuestionDialog
+          open={showSecurityQuestionDialog}
+          onOpenChange={setShowSecurityQuestionDialog}
+          username={username}
+        />
       </DialogContent>
     </Dialog>
   );

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { User, Lock, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { ForgotPasswordDialog } from "@/components/ForgotPasswordDialog";
 
 const REMEMBER_KEY = "yt_live_remember_username";
 
@@ -22,6 +23,7 @@ const Login = () => {
   const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   useEffect(() => {
     // Check for remembered username
@@ -151,20 +153,29 @@ const Login = () => {
             </div>
           )}
 
-          {/* Remember Me (only for login) */}
+          {/* Remember Me & Forgot Password (only for login) */}
           {!isSignUp && (
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="remember"
-                checked={rememberMe}
-                onCheckedChange={(checked) => setRememberMe(checked === true)}
-              />
-              <Label
-                htmlFor="remember"
-                className="text-sm text-muted-foreground cursor-pointer"
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="remember"
+                  checked={rememberMe}
+                  onCheckedChange={(checked) => setRememberMe(checked === true)}
+                />
+                <Label
+                  htmlFor="remember"
+                  className="text-sm text-muted-foreground cursor-pointer"
+                >
+                  記住我
+                </Label>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowForgotPassword(true)}
+                className="text-sm text-primary hover:underline"
               >
-                記住我
-              </Label>
+                忘記密碼？
+              </button>
             </div>
           )}
 
@@ -193,6 +204,11 @@ const Login = () => {
           </button>
         </div>
       </div>
+
+      <ForgotPasswordDialog 
+        open={showForgotPassword} 
+        onOpenChange={setShowForgotPassword} 
+      />
     </div>
   );
 };
