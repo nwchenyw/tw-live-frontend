@@ -64,7 +64,13 @@ export const useAuth = () => {
     }
   }, []);
 
-  const signup = useCallback(async (username: string, password: string, adminPassword: string): Promise<{ error?: string }> => {
+  const signup = useCallback(async (
+    username: string, 
+    password: string, 
+    adminPassword: string,
+    securityQuestion: string,
+    securityAnswer: string
+  ): Promise<{ error?: string }> => {
     try {
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/auth-signup`,
@@ -74,7 +80,7 @@ export const useAuth = () => {
             "Content-Type": "application/json",
             "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
-          body: JSON.stringify({ username, password, adminPassword }),
+          body: JSON.stringify({ username, password, adminPassword, securityQuestion, securityAnswer }),
         }
       );
 

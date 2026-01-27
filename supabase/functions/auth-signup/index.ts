@@ -23,12 +23,20 @@ serve(async (req) => {
   let client: Client | null = null;
 
   try {
-    const { username, password, adminPassword } = await req.json();
+    const { username, password, adminPassword, securityQuestion, securityAnswer } = await req.json();
 
     // Validate input
     if (!username || !password || !adminPassword) {
       return new Response(
         JSON.stringify({ error: "Username, password, and admin password are required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate security question and answer
+    if (!securityQuestion || !securityAnswer) {
+      return new Response(
+        JSON.stringify({ error: "Security question and answer are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -87,12 +95,14 @@ serve(async (req) => {
       );
     }
 
-    // Hash password and create user
+    // Hash password and security answer
     const passwordHash = await hashPassword(password, salt);
+    const normalizedAnswer = securityAnswer.trim().toLowerCase();
+    const securityAnswerHash = await hashPassword(normalizedAnswer, salt);
     
     const result = await client.execute(
-      `INSERT INTO \`${dbName}\`.users (username, password_hash, created_at) VALUES (?, ?, NOW())`,
-      [username, passwordHash]
+      `INSERT INTO \`${dbName}\`.users (username, password_hash, security_question, security_answer_hash, created_at) VALUES (?, ?, ?, ?, NOW())`,
+      [username, passwordHash, securityQuestion, securityAnswerHash]
     );
 
     // Get the newly created user
