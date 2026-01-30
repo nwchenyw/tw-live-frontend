@@ -6,20 +6,12 @@ import { MonitorList, MonitorItem } from "@/components/MonitorList";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useYTLiveApi, StatusItem } from "@/hooks/useYTLiveApi";
-import { useAvatarDb } from "@/hooks/useAvatarDb";
-import { getStoredAvatar, saveAvatarUrlToStorage } from "@/components/SettingsDialog";
-
-const withCacheBust = (url: string) => {
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}v=${Date.now()}`;
-};
 
 const Index = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user, loading: authLoading, isAuthenticated, signOut } = useAuth();
-  const { getAvatarUrl: getAvatarFromDb } = useAvatarDb();
-  const { fetchVideos, fetchStatus, addVideo, deleteVideo, checkHealth, getAvatarUrl } = useYTLiveApi();
+  const { fetchVideos, fetchStatus, addVideo, deleteVideo, checkHealth } = useYTLiveApi();
   
   const [monitors, setMonitors] = useState<MonitorItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -29,35 +21,6 @@ const Index = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [healthStats, setHealthStats] = useState({ watching: 0, cached: 0 });
   const [lastUpdate, setLastUpdate] = useState<string>("");
-  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
-
-  // 載入使用者頭像：優先從 MySQL DB 查表，沒有再用 localStorage
-  useEffect(() => {
-    const loadAvatar = async () => {
-      if (!user?.id) return;
-      
-      try {
-        // 1. 先嘗試從 MySQL DB 獲取頭像 URL
-        const dbAvatarUrl = await getAvatarFromDb(user.id);
-        if (dbAvatarUrl) {
-          // 同步到 localStorage
-          saveAvatarUrlToStorage(user.id, dbAvatarUrl);
-          setAvatarUrl(withCacheBust(dbAvatarUrl));
-          return;
-        }
-      } catch (err) {
-        console.warn("Failed to fetch avatar from DB:", err);
-      }
-      
-      // 2. DB 沒有，fallback 到 localStorage
-      const storedAvatar = getStoredAvatar(user.id);
-      if (storedAvatar) {
-        setAvatarUrl(withCacheBust(storedAvatar));
-      }
-    };
-    
-    loadAvatar();
-  }, [user?.id, getAvatarFromDb]);
 
   // Load videos and status from Python backend
   const loadData = useCallback(async () => {
@@ -231,9 +194,6 @@ const Index = () => {
     navigate("/login");
   };
 
-  const handleAvatarChange = (url: string) => {
-    setAvatarUrl(url ? withCacheBust(url) : undefined);
-  };
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -256,10 +216,7 @@ const Index = () => {
         offliveCount={offlineCount}
         isConnected={isConnected}
         username={user?.username || "User"}
-        userId={user?.id || ""}
-        avatarUrl={avatarUrl}
         onLogout={handleLogout}
-        onAvatarChange={handleAvatarChange}
       />
       
       <main className="flex-1 p-6">

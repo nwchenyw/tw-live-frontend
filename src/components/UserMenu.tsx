@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,30 +11,18 @@ import { SettingsDialog } from "./SettingsDialog";
 
 interface UserMenuProps {
   username: string;
-  userId: string;
-  avatarUrl?: string;
   onLogout: () => void;
-  onAvatarChange: (url: string) => void;
 }
 
-export const UserMenu = ({ username, userId, avatarUrl, onLogout, onAvatarChange }: UserMenuProps) => {
+export const UserMenu = ({ username, onLogout }: UserMenuProps) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
-  const getInitials = (name: string) => {
-    return name.charAt(0).toUpperCase();
-  };
 
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-full">
-            <Avatar className="h-8 w-8 cursor-pointer hover:opacity-80 transition-opacity">
-              <AvatarImage src={avatarUrl} alt={username} />
-              <AvatarFallback className="bg-primary text-primary-foreground text-sm font-medium">
-                {getInitials(username)}
-              </AvatarFallback>
-            </Avatar>
+          <button className="flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-sidebar-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+            <span className="text-sm font-medium text-sidebar-foreground">{username}</span>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
@@ -59,9 +46,6 @@ export const UserMenu = ({ username, userId, avatarUrl, onLogout, onAvatarChange
         open={isSettingsOpen}
         onOpenChange={setIsSettingsOpen}
         username={username}
-        userId={userId}
-        currentAvatarUrl={avatarUrl}
-        onAvatarChange={onAvatarChange}
       />
     </>
   );

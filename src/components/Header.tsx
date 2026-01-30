@@ -8,10 +8,7 @@ interface HeaderProps {
   offliveCount: number;
   isConnected: boolean;
   username: string;
-  userId: string;
-  avatarUrl?: string;
   onLogout: () => void;
-  onAvatarChange: (url: string) => void;
 }
 
 export const Header = ({ 
@@ -21,10 +18,7 @@ export const Header = ({
   offliveCount, 
   isConnected, 
   username,
-  userId,
-  avatarUrl,
   onLogout,
-  onAvatarChange 
 }: HeaderProps) => {
   return (
     <header className="bg-sidebar text-sidebar-foreground px-4 py-3 flex items-center justify-between">
@@ -58,10 +52,7 @@ export const Header = ({
         
         <UserMenu 
           username={username}
-          userId={userId}
-          avatarUrl={avatarUrl}
           onLogout={onLogout}
-          onAvatarChange={onAvatarChange}
         />
       </div>
     </header>
